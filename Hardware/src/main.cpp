@@ -1,18 +1,30 @@
 #include <Arduino.h>
 
-// put function declarations here:
-int myFunction(int, int);
+String receivedMessage = "";
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  Serial.begin(115200); // Initialize serial communication at 115200 baud rate
+  pinMode(LED_BUILTIN, OUTPUT); // Assuming LED_BUILTIN is connected to an LED
+  Serial.println("ESP32 Ready. Waiting for commands.");
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
-
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  while (Serial.available()) {
+    char incomingChar = Serial.read();
+    if (incomingChar == '\n') { // Check for newline character as command terminator
+      if (receivedMessage == "LED_ON") {
+        digitalWrite(LED_BUILTIN, HIGH);
+        Serial.println("LED turned ON");
+      } else if (receivedMessage == "LED_OFF") {
+        digitalWrite(LED_BUILTIN, LOW);
+        Serial.println("LED turned OFF");
+      } else {
+        Serial.print("Unknown command: ");
+        Serial.println(receivedMessage);
+      }
+      receivedMessage = ""; // Clear the message for the next command
+    } else {
+      receivedMessage += incomingChar;
+    }
+  }
 }
