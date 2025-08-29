@@ -18,7 +18,8 @@ class CameraCapture:
                 continue
             
             frame = cv2.flip(frame, 1)
-            processed_frame, _ = self.hand_tracker.process_frame(frame)
+            
+            processed_frame, results, distance = self.hand_tracker.process_frame(frame)
             processed_frame = self.fps_calculator.calculate(processed_frame)
             
             cv2.imshow(self.window_name, processed_frame)

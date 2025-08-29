@@ -1,9 +1,11 @@
 import mediapipe as mp
 import cv2
 import numpy as np
+import serial
+import time
 
 class MediaPipe:
-    def __init__(self, static_mode=False, max_hands=1, detection_conf=0.5, tracking_conf=0.5):
+    def __init__(self, static_mode=False, max_hands=1, detection_conf=0.5, tracking_conf=0.5, serial_port='COM3', baud_rate=115200):
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
             static_image_mode=static_mode,
@@ -13,6 +15,17 @@ class MediaPipe:
         )
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
+        self.Distance = 0
+        
+        # Initialize serial connection with error handling
+        try:
+            self.ser = serial.Serial(serial_port, baud_rate, timeout=1)
+            time.sleep(2)  # Wait for connection to establish
+            print(f"Serial connection established on {serial_port}")
+        except serial.SerialException as e:
+            print(f"Error opening serial port: {e}")
+            self.ser = None
+        
     def process_frame(self, frame):
         frame.flags.writeable = False
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -31,12 +44,14 @@ class MediaPipe:
                 Index_Tip_Coords_Value = np.array([Index_Tip_Coords.x, Index_Tip_Coords.y, Index_Tip_Coords.z])
                 Thumb_Tip_Coords_Value = np.array([Thumb_Tip_Coords.x, Thumb_Tip_Coords.y, Thumb_Tip_Coords.z])
                 
-                distance = np.linalg.norm(Index_Tip_Coords_Value - Thumb_Tip_Coords_Value)
+                self.Distance = np.linalg.norm(Index_Tip_Coords_Value - Thumb_Tip_Coords_Value)
+                self.Distance = self.Distance * 100  # Convert to cm
                 
-                #?Note :.2f is a format specifier used within f-strings to limit the number of decimal places to two
-                print(f"Distance between index and thumb tip: {distance:.2f} mm")
+                # Send distance data via serial
+                self.send_distance_data()
                 
-                # Used to generate the connections on your hands
+                print(f"Distance between index and thumb tip: {self.Distance:.2f} cm")
+                
             for hand_landmarks in results.multi_hand_landmarks:
                 self.mp_drawing.draw_landmarks(
                     frame,
@@ -45,4 +60,29 @@ class MediaPipe:
                     self.mp_drawing_styles.get_default_hand_landmarks_style(),
                     self.mp_drawing_styles.get_default_hand_connections_style()
                 )
-        return frame, results
+        return frame, results, self.Distance
+    
+    def send_distance_data(self):
+        """Send distance data to ESP32 via serial"""
+        if self.ser is None:
+            return
+        
+        try:
+            # Option 1: Send simple commands
+            if self.Distance <= 8.0:
+                self.ser.write(b"LED_ON\n")
+            else:
+                self.ser.write(b"LED_OFF\n")
+            
+            # Option 2: Send the actual distance value (uncomment if needed)
+            # distance_str = f"DISTANCE:{self.Distance:.2f}\n"
+            # self.ser.write(distance_str.encode('utf-8'))
+            
+        except serial.SerialException as e:
+            print(f"Serial communication error: {e}")
+    
+    def close_serial(self):
+        """Close serial connection"""
+        if self.ser:
+            self.ser.close()
+            print("Serial connection closed")
